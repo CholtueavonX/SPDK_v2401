@@ -65,7 +65,7 @@ static char *g_executable_name;
 static struct spdk_app_opts g_default_opts;
 static bool g_disable_cpumask_locks = false;
 
-static int g_core_locks[MAX_CPU_CORES];
+static int g_core_locks[MAX_CPU_CORES];	//用core ID作为index, 记录该core关联的文件描述符, 对应文件中保存了该core绑定的process ID
 
 int
 spdk_app_get_shm_id(void)
@@ -638,7 +638,7 @@ error:
 }
 
 static int
-claim_cpu_cores(uint32_t *failed_core)
+claim_cpu_cores(uint32_t *failed_core)		//mynote1 
 {
 	char core_name[40];
 	int core_fd, pid;
@@ -652,13 +652,16 @@ claim_cpu_cores(uint32_t *failed_core)
 		.l_len = 0,
 	};
 
+	//tofigureout3 core循环的结束条件这么大, 控制合理吗 还是有其他的控制方法.  
+	//分配的cores在allocate_cores()的时候确定,数量记录在g_ut_num_cores中,循环中若超过该数量, get_next_core()的返回会直接跳到循环结束条件.
+	//另:分配的cores是否未被占用记录在g_ut_cores[]中
 	SPDK_ENV_FOREACH_CORE(core) {
-		if (g_core_locks[core] != -1) {
+		if (g_core_locks[core] != -1) {		// 找到不为-1的core
 			/* If this core is locked already, do not try lock it again. */
 			continue;
 		}
 
-		snprintf(core_name, sizeof(core_name), "/var/tmp/spdk_cpu_lock_%03d", core);
+		snprintf(core_name, sizeof(core_name), "/var/tmp/spdk_cpu_lock_%03d", core);		//打开对应该core的文件
 		core_fd = open(core_name, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
 		if (core_fd == -1) {
 			SPDK_ERRLOG("Could not open %s (%s).\n", core_name, spdk_strerror(errno));
@@ -666,20 +669,20 @@ claim_cpu_cores(uint32_t *failed_core)
 			goto error;
 		}
 
-		if (ftruncate(core_fd, sizeof(int)) != 0) {
+		if (ftruncate(core_fd, sizeof(int)) != 0) {		//修改该文件大小为int大小
 			SPDK_ERRLOG("Could not truncate %s (%s).\n", core_name, spdk_strerror(errno));
 			close(core_fd);
 			goto error;
 		}
 
-		core_map = mmap(NULL, sizeof(int), PROT_READ | PROT_WRITE, MAP_SHARED, core_fd, 0);
+		core_map = mmap(NULL, sizeof(int), PROT_READ | PROT_WRITE, MAP_SHARED, core_fd, 0);		//内存映射该文件
 		if (core_map == MAP_FAILED) {
 			SPDK_ERRLOG("Could not mmap core %s (%s).\n", core_name, spdk_strerror(errno));
 			close(core_fd);
 			goto error;
 		}
 
-		if (fcntl(core_fd, F_SETLK, &core_lock) != 0) {
+		if (fcntl(core_fd, F_SETLK, &core_lock) != 0) {			//对该文件区域加锁, 加锁失败可能有进程已经使用了, 进程id已记录在文件里面
 			pid = *core_map;
 			SPDK_ERRLOG("Cannot create lock on core %" PRIu32 ", probably process %d has claimed it.\n",
 				    core, pid);
@@ -690,7 +693,7 @@ claim_cpu_cores(uint32_t *failed_core)
 
 		/* We write the PID to the core lock file so that other processes trying
 		* to claim the same core will know what process is holding the lock. */
-		*core_map = (int)getpid();
+		*core_map = (int)getpid();			// 加锁成功,则记录当前core绑定的进程id,和对应的文件描述符
 		munmap(core_map, sizeof(int));
 		g_core_locks[core] = core_fd;
 		/* Keep core_fd open to maintain the lock. */
@@ -741,7 +744,7 @@ spdk_app_start(struct spdk_app_opts *opts_user, spdk_msg_fn start_fn,
 		return 1;
 	}
 
-	if (!(opts->lcore_map || opts->reactor_mask)) {
+	if (!(opts->lcore_map || opts->reactor_mask)) {		//tofigureout1:reactor_mask是ppt里的CPUMASK吗  和tfo2有什么关系
 		/* Set default CPU mask */
 		opts->reactor_mask = SPDK_APP_DPDK_DEFAULT_CORE_MASK;
 	}
@@ -805,7 +808,7 @@ spdk_app_start(struct spdk_app_opts *opts_user, spdk_msg_fn start_fn,
 		g_core_locks[i] = -1;
 	}
 
-	if (!g_disable_cpumask_locks) {
+	if (!g_disable_cpumask_locks) {			//tofigureout2 关联tgo1
 		if (claim_cpu_cores(NULL)) {
 			SPDK_ERRLOG("Unable to acquire lock on assigned core mask - exiting.\n");
 			return 1;

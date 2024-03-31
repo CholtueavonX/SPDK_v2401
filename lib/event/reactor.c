@@ -1039,7 +1039,7 @@ spdk_reactors_start(void)
 	uint32_t i, current_core;
 	int rc;
 
-	g_rusage_period = (CONTEXT_SWITCH_MONITOR_PERIOD * spdk_get_ticks_hz()) / SPDK_SEC_TO_USEC;
+	g_rusage_period = (CONTEXT_SWITCH_MONITOR_PERIOD * spdk_get_ticks_hz()) / SPDK_SEC_TO_USEC;		//tofigureout4 这个变量代表什么意思
 	g_reactor_state = SPDK_REACTOR_STATE_RUNNING;
 	/* Reinitialize to false, in case the app framework is restarting in the same process. */
 	g_stopping_reactors = false;
@@ -1047,7 +1047,7 @@ spdk_reactors_start(void)
 	current_core = spdk_env_get_current_core();
 	SPDK_ENV_FOREACH_CORE(i) {
 		if (i != current_core) {
-			reactor = spdk_reactor_get(i);
+			reactor = spdk_reactor_get(i);			//tofigureout5  reactor什么时候和core绑定的
 			if (reactor == NULL) {
 				continue;
 			}
