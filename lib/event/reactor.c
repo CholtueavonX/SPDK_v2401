@@ -1047,7 +1047,7 @@ spdk_reactors_start(void)
 	current_core = spdk_env_get_current_core();
 	SPDK_ENV_FOREACH_CORE(i) {
 		if (i != current_core) {
-			reactor = spdk_reactor_get(i);			//tofigureout5  reactor什么时候和core绑定的
+			reactor = spdk_reactor_get(i);			//tofigureout5  reactor什么时候和core绑定的1
 			if (reactor == NULL) {
 				continue;
 			}
